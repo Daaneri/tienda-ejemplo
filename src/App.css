@@ -1,0 +1,33 @@
+import React, { useState, useEffect } from 'react';
+import { supabase } from './supabase'; 
+
+export default function App() {
+  const [productos, setProductos] = useState([]);
+
+  useEffect(() => {
+    const fetch = async () => {
+      const { data } = await supabase.from('productos').select('*');
+      setProductos(data || []);
+    };
+    fetch();
+  }, []);
+
+  return (
+    <div style={{ padding: '40px', fontFamily: 'sans-serif' }}>
+      <h1 style={{ fontStyle: 'italic', fontWeight: '900' }}>MATERÍA</h1>
+      <hr />
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px', marginTop: '20px' }}>
+        {productos.map(p => (
+          <div key={p.id} style={{ border: '1px solid #ddd', padding: '15px', borderRadius: '15px' }}>
+            <img src={p.imagen_url} style={{ width: '100%', borderRadius: '10px' }} />
+            <h3>{p.nombre}</h3>
+            <p>${p.precio}</p>
+            <button style={{ background: 'black', color: 'white', width: '100%', padding: '10px', borderRadius: '10px' }}>
+              AGREGAR
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
