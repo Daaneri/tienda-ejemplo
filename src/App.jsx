@@ -351,7 +351,7 @@ function TiendaPublica() {
           Calidad <br /> <span className="text-zinc-800 italic font-serif" style={{ fontFamily: "'Playfair Display', serif" }}>Sin Tiempo.</span>
         </h1>
         <p className="max-w-2xl text-zinc-500 text-lg md:text-xl font-light leading-relaxed mb-12 mx-auto">
-          Seleccionamos los mejores cueros y metales para crear compañeros de ruta que duran generaciones.
+          Seleccionamos los mejores cueros y metales para crear compañeros de ruta que duran generations.
         </p>
         <button onClick={() => document.getElementById('productos').scrollIntoView()} className="bg-[#FF5A36] text-black px-12 py-5 rounded-full font-black uppercase tracking-widest text-[11px] hover:bg-white transition-all">
           Explorar Colección
@@ -523,13 +523,19 @@ function TiendaPublica() {
               </li>
             </ul>
           </div>
+          
+          {/* CUARTA COLUMNA COMBINADA: PREGUNTAS FRECUENTES + VISITAS */}
           <div className="space-y-8">
-            <h5 className="font-black uppercase text-[10px] tracking-[0.4em] text-white">Club del Mate</h5>
-            <div className="flex flex-col gap-4">
-              <p className="text-zinc-600 text-xs uppercase font-bold tracking-widest">Recibí alertas de stock y ofertas exclusivas</p>
-              <div className="flex border-b border-white/20 pb-2">
-                <input type="email" placeholder="Tu Email" className="bg-transparent text-white text-xs outline-none w-full" />
-                <button className="text-[#FF5A36] font-black uppercase text-[10px] tracking-widest" onClick={() => alert('¡Suscrito al Club del Mate!')}>Ok</button>
+            <h5 className="font-black uppercase text-[10px] tracking-[0.4em] text-white">Preguntas & Visitas</h5>
+            <div className="space-y-6 text-xs">
+              <div>
+                <span className="text-white block font-black uppercase text-[9px] tracking-wider mb-1">¿Hacen envíos?</span>
+                <span className="text-zinc-500 leading-relaxed">Gratis en Villa Constitución. Despachamos por Andreani a todo el país todas las semanas.</span>
+              </div>
+              <div>
+                <span className="text-white block font-black uppercase text-[9px] tracking-wider mb-1">Showroom & Retiros</span>
+                <span className="text-zinc-500 leading-relaxed block">Lunes a Viernes de 16:00 a 20:00 hs — Cita previa.</span>
+                <span className="text-[#FF5A36] font-bold text-[10px] uppercase tracking-wider block mt-1">Coordiná tu visita por WhatsApp</span>
               </div>
             </div>
           </div>
