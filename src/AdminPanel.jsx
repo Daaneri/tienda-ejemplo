@@ -14,6 +14,9 @@ export default function AdminPanel({ onVolver }) {
   const [precio, setPrecio] = useState('');
   const [descripcion, setDescripcion] = useState('');
   const [imageUrl, setImageUrl] = useState('');
+  
+  // Estado para controlar si estamos editando
+  const [editandoId, setEditandoId] = useState(null);
 
   // 1. Escuchar la sesión de Supabase Auth
   useEffect(() => {
@@ -68,39 +71,77 @@ export default function AdminPanel({ onVolver }) {
     await supabase.auth.signOut();
   };
 
-  // 5. Insertar nuevo producto
-  const handleAgregarProducto = async (e) => {
+  // 5. Insertar o Actualizar producto (Manejo unificado del formulario)
+  const handleGuardarProducto = async (e) => {
     e.preventDefault();
     if (!nombre || !precio) return alert('Nombre y precio son obligatorios');
 
     setLoading(true);
-    const { error } = await supabase
-      .from('productos')
-      .insert([{ 
-        nombre, 
-        precio: parseFloat(precio), 
-        descripcion, 
-        imagen: imageUrl 
-      }]);
 
-    setLoading(false);
+    const datosProducto = {
+      nombre,
+      precio: parseFloat(precio),
+      descripcion,
+      imagen: imageUrl
+    };
 
-    if (error) {
-      alert('Error al agregar: ' + error.message);
+    if (editandoId) {
+      // Modo Edición: UPDATE
+      const { error } = await supabase
+        .from('productos')
+        .update(datosProducto)
+        .eq('id', editandoId);
+
+      setLoading(false);
+
+      if (error) {
+        alert('Error al actualizar: ' + error.message);
+      } else {
+        alert('¡Mate actualizado con éxito!');
+        limpiarFormulario();
+        fetchProductos();
+      }
     } else {
-      alert('¡Mate agregado con éxito!');
-      // Limpiar formulario y recargar lista
-      setNombre('');
-      setPrecio('');
-      setDescripcion('');
-      setImageUrl('');
-      fetchProductos();
+      // Modo Carga: INSERT
+      const { error } = await supabase
+        .from('productos')
+        .insert([datosProducto]);
+
+      setLoading(false);
+
+      if (error) {
+        alert('Error al agregar: ' + error.message);
+      } else {
+        alert('¡Mate agregado con éxito!');
+        limpiarFormulario();
+        fetchProductos();
+      }
     }
+  };
+
+  // Cargar datos en el formulario para editar
+  const handleActivarEdicion = (prod) => {
+    setEditandoId(prod.id);
+    setNombre(prod.nombre);
+    setPrecio(prod.precio);
+    setDescripcion(prod.descripcion || '');
+    setImageUrl(prod.imagen || '');
+  };
+
+  const limpiarFormulario = () => {
+    setEditandoId(null);
+    setNombre('');
+    setPrecio('');
+    setDescripcion('');
+    setImageUrl('');
   };
 
   // 6. Eliminar producto
   const handleEliminar = async (id) => {
     if (confirm('¿Seguro querés borrar este producto?')) {
+      // Si justo estábamos editando ese producto, cancelamos la edición
+      if (editandoId === id) limpiarFormulario();
+
       const { error } = await supabase
         .from('productos')
         .delete()
@@ -111,7 +152,7 @@ export default function AdminPanel({ onVolver }) {
     }
   };
 
-  // VISTA 0: ESPERANDO ESTADO DE LA SESIÓN (Previene flashes visuales)
+  // VISTA 0: ESPERANDO ESTADO DE LA SESIÓN
   if (loadingSession) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-zinc-900 text-white">
@@ -120,7 +161,7 @@ export default function AdminPanel({ onVolver }) {
     );
   }
 
-  // VISTA 1: FORMULARIO DE LOGIN (Si no está logueado)
+  // VISTA 1: FORMULARIO DE LOGIN
   if (!session) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-zinc-900 px-4">
@@ -184,10 +225,12 @@ export default function AdminPanel({ onVolver }) {
       </header>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* COLUMNA FORMULARIO DE CARGA */}
+        {/* COLUMNA FORMULARIO DE CARGA / EDICIÓN */}
         <div className="bg-zinc-800 p-6 rounded-xl border border-zinc-700 h-fit">
-          <h3 className="text-xl font-semibold mb-4 text-orange-400">Cargar Nuevo Mate</h3>
-          <form onSubmit={handleAgregarProducto} className="space-y-4">
+          <h3 className="text-xl font-semibold mb-4 text-orange-400">
+            {editandoId ? 'Editar Mate Seleccionado' : 'Cargar Nuevo Mate'}
+          </h3>
+          <form onSubmit={handleGuardarProducto} className="space-y-4">
             <div>
               <label className="block text-sm text-zinc-400 mb-1">Nombre del producto</label>
               <input 
@@ -217,12 +260,25 @@ export default function AdminPanel({ onVolver }) {
                 className="w-full p-2 bg-zinc-900 border border-zinc-700 rounded h-24 resize-none text-white focus:outline-none focus:border-orange-500"
               />
             </div>
-            <button 
-              type="submit" disabled={loading}
-              className="w-full py-2 bg-orange-600 hover:bg-orange-700 rounded font-semibold text-white transition disabled:opacity-50"
-            >
-              {loading ? 'Guardando...' : 'Publicar Producto'}
-            </button>
+            
+            <div className="space-y-2">
+              <button 
+                type="submit" disabled={loading}
+                className={`w-full py-2 rounded font-semibold text-white transition disabled:opacity-50 ${editandoId ? 'bg-amber-600 hover:bg-amber-700' : 'bg-orange-600 hover:bg-orange-700'}`}
+              >
+                {loading ? 'Guardando...' : editandoId ? 'Actualizar Producto' : 'Publicar Producto'}
+              </button>
+              
+              {editandoId && (
+                <button 
+                  type="button" 
+                  onClick={limpiarFormulario}
+                  className="w-full py-1.5 bg-zinc-700 hover:bg-zinc-600 text-zinc-300 rounded text-sm transition"
+                >
+                  Cancelar Edición
+                </button>
+              )}
+            </div>
           </form>
         </div>
 
@@ -231,7 +287,10 @@ export default function AdminPanel({ onVolver }) {
           <h3 className="text-xl font-semibold mb-4 text-zinc-300">Productos en la Web ({productos.length})</h3>
           <div className="space-y-3 max-h-[600px] overflow-y-auto pr-2">
             {productos.map((prod) => (
-              <div key={prod.id} className="flex items-center justify-between p-3 bg-zinc-900 rounded-lg border border-zinc-800">
+              <div 
+                key={prod.id} 
+                className={`flex items-center justify-between p-3 rounded-lg border transition ${editandoId === prod.id ? 'bg-zinc-750 border-amber-500 shadow-md shadow-amber-950/20' : 'bg-zinc-900 border-zinc-800'}`}
+              >
                 <div className="flex items-center space-x-4">
                   <img src={prod.imagen || 'https://via.placeholder.com/150'} alt={prod.nombre} className="w-12 h-12 object-cover rounded bg-zinc-800"/>
                   <div>
@@ -239,12 +298,20 @@ export default function AdminPanel({ onVolver }) {
                     <p className="text-orange-400 font-medium text-sm">${prod.precio}</p>
                   </div>
                 </div>
-                <button 
-                  onClick={() => handleEliminar(prod.id)}
-                  className="px-3 py-1 bg-zinc-800 hover:bg-red-900 hover:text-red-200 text-zinc-400 rounded transition text-xs border border-zinc-700"
-                >
-                  Eliminar
-                </button>
+                <div className="space-x-2">
+                  <button 
+                    onClick={() => handleActivarEdicion(prod)}
+                    className="px-3 py-1 bg-zinc-800 hover:bg-zinc-700 text-amber-400 rounded transition text-xs border border-zinc-700"
+                  >
+                    Editar
+                  </button>
+                  <button 
+                    onClick={() => handleEliminar(prod.id)}
+                    className="px-3 py-1 bg-zinc-800 hover:bg-red-900 hover:text-red-200 text-zinc-400 rounded transition text-xs border border-zinc-700"
+                  >
+                    Eliminar
+                  </button>
+                </div>
               </div>
             ))}
             {productos.length === 0 && <p className="text-zinc-500 text-center py-4">No hay productos cargados en la base de datos.</p>}

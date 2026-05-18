@@ -15,22 +15,31 @@ const CATEGORIAS = ['Todos', 'Imperiales', 'Camioneros', 'Torpedos', 'Bombillas'
 // ==========================================
 function AdminPanel({ onVolver }) {
   const [session, setSession] = useState(null);
+  const [loadingSession, setLoadingSession] = useState(true); // Evita parpadeos
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   
+  // Estados para el CRUD de productos
   const [productos, setProductos] = useState([]);
   const [nombre, setNombre] = useState('');
   const [precio, setPrecio] = useState('');
   const [categoria, setCategoria] = useState('Imperiales');
   const [imageUrl, setImageUrl] = useState('');
+  const [descripcion, setDescripcion] = useState('');
+
+  // Estado para saber si estamos editando
+  const [editandoId, setEditandoId] = useState(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
-    });
+      setLoadingSession(false);
+    }).catch(() => setLoadingSession(false));
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
+      setLoadingSession(false);
     });
     return () => subscription.unsubscribe();
   }, []);
@@ -52,37 +61,83 @@ function AdminPanel({ onVolver }) {
     setLoading(false);
   };
 
-  const handleAgregarProducto = async (e) => {
+  // Guardar (Crear o Editar)
+  const handleGuardarProducto = async (e) => {
     e.preventDefault();
     if (!nombre || !precio) return alert('Nombre y precio requeridos');
 
     setLoading(true);
-    const { error } = await supabase.from('productos').insert([{ 
+
+    // Mapeo exacto con los nombres de columna de tu base de datos (imagen_url y descripcion)
+    const datosProducto = { 
       nombre, 
       precio: parseFloat(precio), 
       categoria,
-      imagen_url: imageUrl 
-    }]);
-    setLoading(false);
+      imagen_url: imageUrl,
+      descripcion
+    };
 
-    if (error) {
-      alert('Error: ' + error.message);
+    if (editandoId) {
+      // Modo Edición
+      const { error } = await supabase.from('productos').update(datosProducto).eq('id', editandoId);
+      setLoading(false);
+
+      if (error) {
+        alert('Error al actualizar: ' + error.message);
+      } else {
+        alert('¡Producto actualizado con éxito!');
+        limpiarFormulario();
+        fetchProductos();
+      }
     } else {
-      alert('¡Producto publicado con éxito!');
-      setNombre('');
-      setPrecio('');
-      setImageUrl('');
-      fetchProductos();
+      // Modo Creación
+      const { error } = await supabase.from('productos').insert([datosProducto]);
+      setLoading(false);
+
+      if (error) {
+        alert('Error al guardar: ' + error.message);
+      } else {
+        alert('¡Producto publicado con éxito!');
+        limpiarFormulario();
+        fetchProductos();
+      }
     }
+  };
+
+  const handleActivarEdicion = (p) => {
+    setEditandoId(p.id);
+    setNombre(p.nombre);
+    setPrecio(p.precio);
+    setCategoria(p.categoria || 'Imperiales');
+    setImageUrl(p.imagen_url || '');
+    setDescripcion(p.descripcion || '');
+  };
+
+  const limpiarFormulario = () => {
+    setEditandoId(null);
+    setNombre('');
+    setPrecio('');
+    setCategoria('Imperiales');
+    setImageUrl('');
+    setDescripcion('');
   };
 
   const handleEliminar = async (id) => {
     if (confirm('¿Seguro querés borrar este producto?')) {
+      if (editandoId === id) limpiarFormulario();
       const { error } = await supabase.from('productos').delete().eq('id', id);
       if (error) alert('Error: ' + error.message);
       else fetchProductos();
     }
   };
+
+  if (loadingSession) {
+    return (
+      <div className="min-h-screen bg-[#080808] flex items-center justify-center font-sans text-white">
+        <p className="text-zinc-500 font-mono text-[10px] tracking-[0.4em] uppercase animate-pulse">Verificando Credenciales...</p>
+      </div>
+    );
+  }
 
   if (!session) {
     return (
@@ -130,9 +185,12 @@ function AdminPanel({ onVolver }) {
       </header>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
+        {/* FORMULARIO DE CARGA / EDICIÓN */}
         <div className="bg-[#0e0e0e] p-8 rounded-[40px] border border-white/5 h-fit space-y-6">
-          <h3 className="text-sm font-black uppercase tracking-widest text-[#FF5A36]">Nuevo Producto</h3>
-          <form onSubmit={handleAgregarProducto} className="space-y-4">
+          <h3 className="text-sm font-black uppercase tracking-widest text-[#FF5A36]">
+            {editandoId ? 'Editar Producto' : 'Nuevo Producto'}
+          </h3>
+          <form onSubmit={handleGuardarProducto} className="space-y-4">
             <input type="text" placeholder="NOMBRE" value={nombre} onChange={(e) => setNombre(e.target.value)}
               className="w-full bg-black border border-white/10 rounded-2xl px-5 py-3.5 text-xs outline-none focus:border-[#FF5A36]" required />
             
@@ -146,18 +204,30 @@ function AdminPanel({ onVolver }) {
 
             <input type="url" placeholder="URL DE LA IMAGEN" value={imageUrl} onChange={(e) => setImageUrl(e.target.value)}
               className="w-full bg-black border border-white/10 rounded-2xl px-5 py-3.5 text-xs outline-none focus:border-[#FF5A36]" />
+
+            <textarea placeholder="DESCRIPCIÓN CORTA" value={descripcion} onChange={(e) => setDescripcion(e.target.value)}
+              className="w-full bg-black border border-white/10 rounded-2xl px-5 py-3.5 text-xs outline-none focus:border-[#FF5A36] h-24 resize-none text-white" />
             
-            <button type="submit" disabled={loading} className="w-full bg-[#FF5A36] text-black py-4 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-white transition-all">
-              {loading ? 'GUARDANDO...' : 'PUBLICAR EN WEB'}
-            </button>
+            <div className="space-y-2">
+              <button type="submit" disabled={loading} className={`w-full py-4 rounded-2xl font-black uppercase tracking-widest text-xs transition-all ${editandoId ? 'bg-amber-500 text-black hover:bg-white' : 'bg-[#FF5A36] text-black hover:bg-white'}`}>
+                {loading ? 'GUARDANDO...' : editandoId ? 'ACTUALIZAR EN WEB' : 'PUBLICAR EN WEB'}
+              </button>
+
+              {editandoId && (
+                <button type="button" onClick={limpiarFormulario} className="w-full bg-zinc-900 border border-white/10 text-zinc-400 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:text-white transition">
+                  Cancelar Edición
+                </button>
+              )}
+            </div>
           </form>
         </div>
 
+        {/* LISTADO DE PRODUCTOS EN TIENDA */}
         <div className="lg:col-span-2 bg-[#0e0e0e] p-8 rounded-[40px] border border-white/5">
           <h3 className="text-sm font-black uppercase tracking-widest text-zinc-400 mb-6">Productos Online ({productos.length})</h3>
-          <div className="space-y-4 max-h-[500px] overflow-y-auto pr-2">
+          <div className="space-y-4 max-h-[550px] overflow-y-auto pr-2">
             {productos.map((p) => (
-              <div key={p.id} className="flex items-center justify-between p-4 bg-black rounded-2xl border border-white/5">
+              <div key={p.id} className={`flex items-center justify-between p-4 bg-black rounded-2xl border transition-all ${editandoId === p.id ? 'border-amber-500 shadow-lg shadow-amber-500/5' : 'border-white/5'}`}>
                 <div className="flex items-center space-x-4">
                   <img src={p.imagen_url || 'https://via.placeholder.com/150'} alt="" className="w-12 h-12 object-cover rounded-xl bg-zinc-900"/>
                   <div>
@@ -166,9 +236,14 @@ function AdminPanel({ onVolver }) {
                     <p className="text-[9px] font-bold text-zinc-600 uppercase tracking-widest">{p.categoria}</p>
                   </div>
                 </div>
-                <button onClick={() => handleEliminar(p.id)} className="px-4 py-2 bg-red-500/10 border border-red-500/10 text-red-400 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-red-500/20 transition">
-                  Eliminar
-                </button>
+                <div className="flex gap-2">
+                  <button onClick={() => handleActivarEdicion(p)} className="px-4 py-2 bg-zinc-900 border border-white/5 text-amber-400 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-zinc-800 transition">
+                    Editar
+                  </button>
+                  <button onClick={() => handleEliminar(p.id)} className="px-4 py-2 bg-red-500/10 border border-red-500/10 text-red-400 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-red-500/20 transition">
+                    Eliminar
+                  </button>
+                </div>
               </div>
             ))}
           </div>
@@ -183,80 +258,9 @@ function AdminPanel({ onVolver }) {
 // ==========================================
 export default function App() {
   const [verAdmin, setVerAdmin] = useState(false); // Estado para alternar vistas
-  const [productos, setProductos] = useState([]);
-  const [carrito, setCarrito] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [filtro, setFiltro] = useState('Todos');
-  const [busqueda, setBusqueda] = useState('');
-  const [carritoAbierto, setCarritoAbierto] = useState(false);
-  const [productoSeleccionado, setProductoSeleccionado] = useState(null);
-  const [cp, setCp] = useState('');
-  const [envio, setEnvio] = useState(null);
-  const [isCheckoutLoading, setIsCheckoutLoading] = useState(false);
-
-  // Carga de productos desde Supabase
-  useEffect(() => {
-    const fetchDocs = async () => {
-      try {
-        const { data } = await supabase.from('productos').select('*');
-        setProductos(data || []);
-      } catch (e) { 
-        console.error("Error cargando productos:", e); 
-      } finally { 
-        setLoading(false); 
-      }
-    };
-    fetchDocs();
-  }, [verAdmin]); // Se recarga al volver del admin por si hubo cambios
-
-  const productosFiltrados = useMemo(() => {
-    let result = [...productos];
-    if (filtro !== 'Todos') result = result.filter(p => p.categoria === filtro);
-    if (busqueda.trim() !== '') {
-      result = result.filter(p => p.nombre.toLowerCase().includes(busqueda.toLowerCase()));
-    }
-    return result;
-  }, [productos, filtro, busqueda]);
-
-  const subtotal = useMemo(() => carrito.reduce((acc, i) => acc + i.precio, 0), [carrito]);
-  const total = subtotal + (envio || 0);
-
-  const agregarAlCarrito = (p) => {
-    setCarrito([...carrito, p]);
-  };
-
-  const generarLinkWA = () => {
-    const baseMsg = "¡Hola! Estoy viendo la tienda de Ejemplo Mates y me interesa:";
-    const items = carrito.map(i => `%0A- ${i.nombre} ($${i.precio})`).join('');
-    const totalMsg = `%0A%0ATotal estimado: $${total}`;
-    return `https://wa.me/543400000000?text=${baseMsg}${items}${totalMsg}`;
-  };
-
-  const handleMercadoPago = async () => {
-    if (carrito.length === 0) return;
-    setIsCheckoutLoading(true);
-    setTimeout(() => {
-      setIsCheckoutLoading(false);
-      alert("Redirigiendo a Mercado Pago seguro...");
-    }, 1500);
-  };
-
-  // INTERRUPCIÓN: Si está activo el panel del Admin, frena el flujo público
-  if (verAdmin) {
-    return <AdminPanel onVolver={() => setVerAdmin(false)} />;
-  }
-
-  if (loading) return (
-    <div className="h-screen bg-[#080808] flex flex-col items-center justify-center gap-4">
-      <motion.div 
-        animate={{ rotate: 360 }} 
-        transition={{ repeat: Infinity, duration: 1, ease: "linear" }}
-        className="w-12 h-12 border-4 border-[#FF5A36] border-t-transparent rounded-full" 
-      />
-      <span className="font-mono text-[10px] tracking-[0.4em] text-zinc-500 uppercase">Villa Constitución</span>
-    </div>
-  );
-
+  // ==========================================================
+// CONTINUACIÓN DE APP() — SIDEBAR CARRITO Y FOOTER OPTIMIZADOS
+// ==========================================================
   return (
     <div className="bg-[#080808] min-h-screen text-white selection:bg-[#FF5A36] selection:text-black overflow-x-hidden font-sans">
       <style>{`
@@ -467,7 +471,7 @@ export default function App() {
                 </h2>
                 <div className="space-y-6 mb-12">
                   <p className="text-zinc-500 text-base leading-relaxed">
-                    Producto fabricado artesanalmente en Villa Constitución. Cada unidad presenta variaciones naturales en el cuero, garantizando una pieza única. Incluye bombilla de regalo.
+                    {productoSeleccionado.descripcion || "Producto fabricado artesanalmente en Villa Constitución. Cada unidad presenta variaciones naturales en el cuero, garantizando una pieza única. Incluye bombilla de regalo."}
                   </p>
                   <ul className="text-zinc-400 text-xs space-y-2 font-bold uppercase tracking-widest">
                     <li>✓ Virola de Alpaca Cincelada</li>
@@ -479,7 +483,10 @@ export default function App() {
                   ${productoSeleccionado.precio.toLocaleString()}
                 </div>
                 <button 
-                  onClick={() => agregarAlCarrito(productoSeleccionado)} 
+                  onClick={() => {
+                    agregarAlCarrito(productoSeleccionado);
+                    setProductoSeleccionado(null);
+                  }} 
                   className="w-full bg-[#FF5A36] text-black py-6 rounded-[30px] font-black uppercase tracking-widest text-xs hover:bg-white transition-all shadow-2xl"
                 >
                   Sumar al Carrito
@@ -497,7 +504,7 @@ export default function App() {
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setCarritoAbierto(false)} className="fixed inset-0 bg-black/80 z-[200] backdrop-blur-sm" />
             <motion.aside 
               initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }} transition={{ type: "spring", damping: 25, stiffness: 200 }}
-              className="fixed right-0 top-0 bottom-0 w-full max-w-lg bg-[#0e0e0e] z-[210] p-8 md:p-12 flex flex-col border-l border-white/5"
+              className="fixed right-0 top-0 bottom-0 w-full max-w-lg bg-[#0e0e0e] z-[210] p-8 md:p-12 flex flex-col border-l border-white/5 shadow-2xl"
             >
               <div className="flex justify-between items-center mb-12">
                 <div>
@@ -506,11 +513,12 @@ export default function App() {
                     {carrito.length} productos seleccionados
                   </p>
                 </div>
-                <button onClick={() => setCarritoAbierto(false)} className="hover:rotate-90 transition-transform">
+                <button onClick={() => setCarritoAbierto(false)} className="hover:rotate-90 transition-transform duration-300">
                   <Icon name="X" size={36} />
                 </button>
               </div>
 
+              {/* Contenedor de Items */}
               <div className="flex-1 overflow-y-auto space-y-8 pr-4 custom-scroll">
                 {carrito.length === 0 ? (
                   <div className="h-full flex flex-col items-center justify-center text-center space-y-4">
@@ -527,6 +535,7 @@ export default function App() {
                         <p className="font-black text-sm uppercase tracking-tight mb-1">{item.nombre}</p>
                         <p className="text-[#FF5A36] font-black text-lg">${item.precio.toLocaleString()}</p>
                       </div>
+                      {/* Borrado seguro usando el index exacto */}
                       <button onClick={() => setCarrito(carrito.filter((_, i) => i !== idx))} className="p-2 hover:bg-red-500/10 rounded-full transition-colors group">
                         <Icon name="Trash2" size={18} className="text-zinc-700 group-hover:text-red-500" />
                       </button>
@@ -535,6 +544,7 @@ export default function App() {
                 )}
               </div>
 
+              {/* Footer del Carrito (Cálculos y Checkout) */}
               <div className="pt-10 space-y-8">
                 <div className="bg-zinc-900/50 p-8 rounded-[40px] space-y-6">
                   <div className="flex justify-between items-center text-xs font-bold uppercase tracking-widest text-zinc-500">
@@ -544,7 +554,7 @@ export default function App() {
                   <div className="space-y-4">
                     <div className="flex gap-2">
                       <input type="text" placeholder="CP (2919 Villa)" className="flex-1 bg-black border border-white/10 rounded-2xl px-5 py-4 text-xs outline-none focus:border-[#FF5A36]" value={cp} onChange={(e) => setCp(e.target.value)} />
-                      <button onClick={() => setEnvio(cp === '2919' ? 0 : 4500)} className="bg-white text-black px-8 rounded-2xl font-black text-[10px] uppercase">
+                      <button onClick={() => setEnvio(cp === '2919' ? 0 : 4500)} className="bg-white text-black px-8 rounded-2xl font-black text-[10px] uppercase hover:bg-[#FF5A36] hover:text-black transition-colors">
                         Calcular
                       </button>
                     </div>
@@ -564,7 +574,7 @@ export default function App() {
                   <button onClick={handleMercadoPago} disabled={isCheckoutLoading || carrito.length === 0} className="bg-white text-black py-6 rounded-[30px] font-black uppercase tracking-widest text-[10px] hover:bg-[#FF5A36] transition-all disabled:opacity-50">
                     {isCheckoutLoading ? "Cargando..." : "Pago Seguro"}
                   </button>
-                  <a href={generarLinkWA()} target="_blank" className="bg-[#25D366] text-white py-6 rounded-[30px] flex items-center justify-center gap-2 font-black uppercase tracking-widest text-[10px]">
+                  <a href={generarLinkWA()} target="_blank" rel="noopener noreferrer" className="bg-[#25D366] text-white py-6 rounded-[30px] flex items-center justify-center gap-2 font-black uppercase tracking-widest text-[10px] hover:scale-[1.02] transition-transform">
                     WhatsApp
                   </a>
                 </div>
@@ -574,11 +584,11 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* FOOTER */}
+      {/* FOOTER GENERAL */}
       <footer id="contacto" className="py-32 border-t border-white/5 px-6 bg-[#060606]">
         <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-16">
           <div className="space-y-8">
-            <span className="font-serif italic text-3xl font-black">Ejemplo Mates</span>
+            <span className="font-serif italic text-3xl font-black" style={{ fontFamily: "'Playfair Display', serif" }}>Ejemplo Mates</span>
             <p className="text-zinc-500 text-sm leading-relaxed max-w-xs">
               Artesanía santafesina con proyección internacional. Showroom exclusivo en Villa Constitución.
             </p>
