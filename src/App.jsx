@@ -15,12 +15,11 @@ const CATEGORIAS = ['Todos', 'Imperiales', 'Camioneros', 'Torpedos', 'Bombillas'
 // ==========================================
 function AdminPanel({ onVolver }) {
   const [session, setSession] = useState(null);
-  const [loadingSession, setLoadingSession] = useState(true); // Evita parpadeos
+  const [loadingSession, setLoadingSession] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   
-  // Estados para el CRUD de productos
   const [productos, setProductos] = useState([]);
   const [nombre, setNombre] = useState('');
   const [precio, setPrecio] = useState('');
@@ -28,7 +27,6 @@ function AdminPanel({ onVolver }) {
   const [imageUrl, setImageUrl] = useState('');
   const [descripcion, setDescripcion] = useState('');
 
-  // Estado para saber si estamos editando
   const [editandoId, setEditandoId] = useState(null);
 
   useEffect(() => {
@@ -61,14 +59,12 @@ function AdminPanel({ onVolver }) {
     setLoading(false);
   };
 
-  // Guardar (Crear o Editar)
   const handleGuardarProducto = async (e) => {
     e.preventDefault();
     if (!nombre || !precio) return alert('Nombre y precio requeridos');
 
     setLoading(true);
 
-    // Mapeo exacto con los nombres de columna de tu base de datos (imagen_url y descripcion)
     const datosProducto = { 
       nombre, 
       precio: parseFloat(precio), 
@@ -78,7 +74,6 @@ function AdminPanel({ onVolver }) {
     };
 
     if (editandoId) {
-      // Modo Edición
       const { error } = await supabase.from('productos').update(datosProducto).eq('id', editandoId);
       setLoading(false);
 
@@ -90,7 +85,6 @@ function AdminPanel({ onVolver }) {
         fetchProductos();
       }
     } else {
-      // Modo Creación
       const { error } = await supabase.from('productos').insert([datosProducto]);
       setLoading(false);
 
@@ -185,7 +179,6 @@ function AdminPanel({ onVolver }) {
       </header>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
-        {/* FORMULARIO DE CARGA / EDICIÓN */}
         <div className="bg-[#0e0e0e] p-8 rounded-[40px] border border-white/5 h-fit space-y-6">
           <h3 className="text-sm font-black uppercase tracking-widest text-[#FF5A36]">
             {editandoId ? 'Editar Producto' : 'Nuevo Producto'}
@@ -222,7 +215,6 @@ function AdminPanel({ onVolver }) {
           </form>
         </div>
 
-        {/* LISTADO DE PRODUCTOS EN TIENDA */}
         <div className="lg:col-span-2 bg-[#0e0e0e] p-8 rounded-[40px] border border-white/5">
           <h3 className="text-sm font-black uppercase tracking-widest text-zinc-400 mb-6">Productos Online ({productos.length})</h3>
           <div className="space-y-4 max-h-[550px] overflow-y-auto pr-2">
@@ -257,10 +249,79 @@ function AdminPanel({ onVolver }) {
 // COMPONENTE PRINCIPAL (TIENDA PÚBLICA)
 // ==========================================
 export default function App() {
-  const [verAdmin, setVerAdmin] = useState(false); // Estado para alternar vistas
-  // ==========================================================
-// CONTINUACIÓN DE APP() — SIDEBAR CARRITO Y FOOTER OPTIMIZADOS
-// ==========================================================
+  const [verAdmin, setVerAdmin] = useState(false);
+  const [productos, setProductos] = useState([]);
+  const [carrito, setCarrito] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [filtro, setFiltro] = useState('Todos');
+  const [busqueda, setBusqueda] = useState('');
+  const [carritoAbierto, setCarritoAbierto] = useState(false);
+  const [productoSeleccionado, setProductoSeleccionado] = useState(null);
+  const [cp, setCp] = useState('');
+  const [envio, setEnvio] = useState(null);
+  const [isCheckoutLoading, setIsCheckoutLoading] = useState(false);
+
+  useEffect(() => {
+    const fetchDocs = async () => {
+      try {
+        const { data } = await supabase.from('productos').select('*');
+        setProductos(data || []);
+      } catch (e) { 
+        console.error("Error cargando productos:", e); 
+      } finally { 
+        setLoading(false); 
+      }
+    };
+    fetchDocs();
+  }, [verAdmin]);
+
+  const productosFiltrados = useMemo(() => {
+    let result = [...productos];
+    if (filtro !== 'Todos') result = result.filter(p => p.categoria === filtro);
+    if (busqueda.trim() !== '') {
+      result = result.filter(p => p.nombre.toLowerCase().includes(busqueda.toLowerCase()));
+    }
+    return result;
+  }, [productos, filtro, busqueda]);
+
+  const subtotal = useMemo(() => carrito.reduce((acc, i) => acc + i.precio, 0), [carrito]);
+  const total = subtotal + (envio || 0);
+
+  const agregarAlCarrito = (p) => {
+    setCarrito([...carrito, p]);
+  };
+
+  const generarLinkWA = () => {
+    const baseMsg = "¡Hola! Estoy viendo la tienda de Ejemplo Mates y me interesa:";
+    const items = carrito.map(i => `%0A- ${i.nombre} ($${i.precio})`).join('');
+    const totalMsg = `%0A%0ATotal estimado: $${total}`;
+    return `https://wa.me/543400000000?text=${baseMsg}${items}${totalMsg}`;
+  };
+
+  const handleMercadoPago = async () => {
+    if (carrito.length === 0) return;
+    setIsCheckoutLoading(true);
+    setTimeout(() => {
+      setIsCheckoutLoading(false);
+      alert("Redirigiendo a Mercado Pago seguro...");
+    }, 1500);
+  };
+
+  if (verAdmin) {
+    return <AdminPanel onVolver={() => setVerAdmin(false)} />;
+  }
+
+  if (loading) return (
+    <div className="h-screen bg-[#080808] flex flex-col items-center justify-center gap-4">
+      <motion.div 
+        animate={{ rotate: 360 }} 
+        transition={{ repeat: Infinity, duration: 1, ease: "linear" }}
+        className="w-12 h-12 border-4 border-[#FF5A36] border-t-transparent rounded-full" 
+      />
+      <span className="font-mono text-[10px] tracking-[0.4em] text-zinc-500 uppercase">Cargando Tienda...</span>
+    </div>
+  );
+
   return (
     <div className="bg-[#080808] min-h-screen text-white selection:bg-[#FF5A36] selection:text-black overflow-x-hidden font-sans">
       <style>{`
@@ -518,7 +579,6 @@ export default function App() {
                 </button>
               </div>
 
-              {/* Contenedor de Items */}
               <div className="flex-1 overflow-y-auto space-y-8 pr-4 custom-scroll">
                 {carrito.length === 0 ? (
                   <div className="h-full flex flex-col items-center justify-center text-center space-y-4">
@@ -535,7 +595,6 @@ export default function App() {
                         <p className="font-black text-sm uppercase tracking-tight mb-1">{item.nombre}</p>
                         <p className="text-[#FF5A36] font-black text-lg">${item.precio.toLocaleString()}</p>
                       </div>
-                      {/* Borrado seguro usando el index exacto */}
                       <button onClick={() => setCarrito(carrito.filter((_, i) => i !== idx))} className="p-2 hover:bg-red-500/10 rounded-full transition-colors group">
                         <Icon name="Trash2" size={18} className="text-zinc-700 group-hover:text-red-500" />
                       </button>
@@ -544,7 +603,6 @@ export default function App() {
                 )}
               </div>
 
-              {/* Footer del Carrito (Cálculos y Checkout) */}
               <div className="pt-10 space-y-8">
                 <div className="bg-zinc-900/50 p-8 rounded-[40px] space-y-6">
                   <div className="flex justify-between items-center text-xs font-bold uppercase tracking-widest text-zinc-500">
@@ -630,7 +688,6 @@ export default function App() {
         <div className="max-w-7xl mx-auto mt-32 pt-8 border-t border-white/5 flex flex-col md:flex-row justify-between items-center gap-8">
           <p className="text-zinc-700 text-[9px] uppercase tracking-[0.5em]">© 2026 Ejemplo Mates — Todos los derechos reservados</p>
           <div className="flex items-center gap-8">
-            {/* BOTÓN SECRETO PARA IR AL PANEL ADMIN */}
             <button 
               onClick={() => setVerAdmin(true)} 
               className="text-[9px] font-black uppercase tracking-[0.3em] text-zinc-800 hover:text-zinc-600 transition-colors"
